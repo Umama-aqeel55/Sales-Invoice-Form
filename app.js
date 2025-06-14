@@ -1,100 +1,253 @@
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', () => {
     const salesFormContainer = document.getElementById('salesFormContainer');
-    const mainSalesFormElement = document.getElementById('mainSalesForm');   
+    const salesListContainer = document.getElementById('salesListContainer');
+    const listButton = document.getElementById('listButton');
+    const listButtonBack = document.getElementById('listButtonBack');
+    const backToDashboardButton = document.getElementById('backToDashboardButton');
+    const backToDashboardButtonList = document.getElementById('backToDashboardButtonList');
 
-    const addItemButton = document.getElementById('addItemButton');
-    const salesItemsTableBody = document.querySelector('#salesItemsTable tbody');
+    const mainSalesForm = document.getElementById('mainSalesForm');
+    const dateInput = document.getElementById('date');
+    const salesInvoiceNoInput = document.getElementById('salesInvoiceNo');
+    const descriptionInput = document.getElementById('description');
+    const attachmentInput = document.getElementById('attachment');
+    const customerCodeSelect = document.getElementById('customerCode');
+    const customerNameSelect = document.getElementById('customerName');
+    const customerAddressInput = document.getElementById('customerAddress');
+    const telephoneInput = document.getElementById('telephone');
     const termsOfPaymentSelect = document.getElementById('termsOfPayment');
     const newTermInput = document.getElementById('newTermInput');
     const addTermButton = document.getElementById('addTermButton');
-    const listButton = document.getElementById('listButton'); 
-    const listButtonBack = document.getElementById('listButtonBack'); 
-
-    const printFormButton = document.getElementById('printFormButton');
-    const confirmClearFormButton = document.getElementById('confirmClearFormButton');
+    const salesItemsTableBody = document.querySelector('#salesItemsTable tbody');
+    const addItemButton = document.getElementById('addItemButton');
+    const totalQuantitySpan = document.getElementById('totalQuantity');
+    const grossAmountSpan = document.getElementById('grossAmount');
+    const discountInput = document.getElementById('discount');
+    const cashReceivedInput = document.getElementById('cashReceived');
+    const finalNetAmountSpan = document.getElementById('finalNetAmount');
     const submitSalesButton = document.getElementById('submitSalesButton');
     const updateSalesButton = document.getElementById('updateSalesButton');
     const clearFormButton = document.getElementById('clearFormButton');
+    const confirmClearFormButton = document.getElementById('confirmClearFormButton');
+    const printFormButton = document.getElementById('printFormButton');
 
-    const salesListContainer = document.getElementById('salesListContainer');
     const salesListTableBody = document.getElementById('salesListTableBody');
     const noEntriesMessage = document.getElementById('noEntriesMessage');
 
-    const backToDashboardButton = document.getElementById('backToDashboardButton'); 
-    const backToDashboardButtonList = document.getElementById('backToDashboardButtonList'); 
-
-    const exportButtonForm = document.getElementById('exportButtonForm');
-    const exportButtonList = document.getElementById('exportButtonList');
     const exportPdfButton = document.getElementById('exportPdfButton');
     const exportExcelButton = document.getElementById('exportExcelButton');
+    const exportEmailButton = document.getElementById('exportEmailButton');
     const exportWhatsappButton = document.getElementById('exportWhatsappButton');
-    const exportEmailButton = document.getElementById('exportEmailButton'); 
+    const exportButtonForm = document.getElementById('exportButtonForm');
+    const exportButtonList = document.getElementById('exportButtonList');
 
-    const exportOptionsModal = new bootstrap.Modal(document.getElementById('exportOptionsModal'));
+    let salesRecords = JSON.parse(localStorage.getItem('salesRecords')) || [];
+    let currentEditIndex = -1;
 
-    const totalQuantityField = document.getElementById('totalQuantity');
-    const grossAmountField = document.getElementById('grossAmount');
-    const discountInput = document.getElementById('discount');
-    const cashReceivedInput = document.getElementById('cashReceived');
-    const finalNetAmountField = document.getElementById('finalNetAmount');
+    const generateSalesInvoiceNo = () => {
+        const lastInvoiceNo = salesRecords.length > 0 ? salesRecords[salesRecords.length - 1].salesInvoiceNo : 'INV-000';
+        const num = parseInt(lastInvoiceNo.split('-')[1]) + 1;
+        return `INV-${String(num).padStart(3, '0')}`;
+    };
 
-    const salesInvoiceNoInput = document.getElementById('salesInvoiceNo');
+    const today = new Date();
+    dateInput.value = today.toISOString().split('T')[0];
 
-    let salesRecords = [];
-    let nextSalesId = 1; 
-    let nextInvoiceNumber = 1001; 
-    let currentMode = 'add';
-    let editingRecordId = null;
-
-
-    function calculateRowNetAmount(row) {
-        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-        const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
-        const netAmount = qty * rate;
-        row.querySelector('.item-net-amount').value = netAmount.toFixed(2);
-        updateAllTotals(); 
-    }
-
-    function updateAllTotals() {
-        let totalQty = 0;
-        let grossAmt = 0;
+    const updateCalculations = () => {
+        let totalQuantity = 0;
+        let grossAmount = 0;
 
         salesItemsTableBody.querySelectorAll('tr').forEach(row => {
-            const qtyInput = row.querySelector('.item-qty');
-            const netAmountInput = row.querySelector('.item-net-amount');
-
-            if (qtyInput) {
-                totalQty += parseFloat(qtyInput.value) || 0;
-            }
-            if (netAmountInput) {
-                grossAmt += parseFloat(netAmountInput.value) || 0;
-            }
+            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+            const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
+            const netAmount = qty * rate;
+            row.querySelector('.item-net-amount').value = netAmount.toFixed(2);
+            totalQuantity += qty;
+            grossAmount += netAmount;
         });
+
+        totalQuantitySpan.textContent = totalQuantity;
+        grossAmountSpan.textContent = grossAmount.toFixed(2);
 
         const discount = parseFloat(discountInput.value) || 0;
         const cashReceived = parseFloat(cashReceivedInput.value) || 0;
+        const finalNetAmount = grossAmount - discount;
+        finalNetAmountSpan.textContent = finalNetAmount.toFixed(2);
+    };
 
-        const finalNet = grossAmt - discount - cashReceived;
+    const addItemRow = (item = {}) => {
+        const newRow = salesItemsTableBody.insertRow();
+        newRow.innerHTML = `
+            <td><input type="text" class="form-control item-code" value="${item.itemCode || ''}"></td>
+            <td>
+                <select class="form-select item-description">
+                    <option value="">Select Description</option>
+                    <option ${item.description === 'Laptop' ? 'selected' : ''}>Laptop</option>
+                    <option ${item.description === 'Monitor' ? 'selected' : ''}>Monitor</option>
+                    <option ${item.description === 'Keyboard' ? 'selected' : ''}>Keyboard</option>
+                    <option ${item.description === 'Mouse' ? 'selected' : ''}>Mouse</option>
+                    <option ${item.description === 'Printer' ? 'selected' : ''}>Printer</option>
+                </select>
+            </td>
+            <td><input type="number" class="form-control item-qty" value="${item.qty || 1}" min="1"></td>
+            <td><input type="text" class="form-control item-unit" value="${item.unit || 'Unit'}"></td>
+            <td><input type="number" class="form-control item-rate" value="${item.rate || 0}" min="0"></td>
+            <td><input type="number" class="form-control item-net-amount" readonly value="${item.netAmount || 0}"></td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm delete-row">Delete</button>
+            </td>
+        `;
 
-        totalQuantityField.textContent = totalQty;
-        grossAmountField.textContent = grossAmt.toFixed(2);
-        finalNetAmountField.textContent = finalNet.toFixed(2);
-    }
+        newRow.querySelector('.delete-row').addEventListener('click', (e) => {
+            e.target.closest('tr').remove();
+            updateCalculations();
+        });
 
-    function attachRowEventListeners(row) {
-        const qtyInput = row.querySelector('.item-qty');
-        const rateInput = row.querySelector('.item-rate');
-        const deleteButton = row.querySelector('.delete-row');
+        newRow.querySelectorAll('.item-qty, .item-rate').forEach(input => {
+            input.addEventListener('input', updateCalculations);
+        });
 
-        if (qtyInput) {
-            qtyInput.addEventListener('input', () => calculateRowNetAmount(row));
+        updateCalculations();
+    };
+
+    addItemButton.addEventListener('click', () => addItemRow());
+
+    const resetForm = () => {
+        mainSalesForm.reset();
+        salesInvoiceNoInput.value = generateSalesInvoiceNo();
+        dateInput.value = today.toISOString().split('T')[0];
+        salesItemsTableBody.innerHTML = '';
+        addItemRow({ itemCode: 'ITM001', description: 'Laptop', qty: 1, unit: 'Unit', rate: 1000, netAmount: 1000 });
+        totalQuantitySpan.textContent = '0';
+        grossAmountSpan.textContent = '0.00';
+        discountInput.value = '0';
+        cashReceivedInput.value = '0';
+        finalNetAmountSpan.textContent = '0.00';
+        currentEditIndex = -1;
+        submitSalesButton.style.display = 'block';
+        updateSalesButton.style.display = 'none';
+        attachmentInput.value = '';
+    };
+
+    const saveSalesRecord = (e) => {
+        e.preventDefault();
+        const salesItems = [];
+        salesItemsTableBody.querySelectorAll('tr').forEach(row => {
+            salesItems.push({
+                itemCode: row.querySelector('.item-code').value,
+                description: row.querySelector('.item-description').value,
+                qty: parseFloat(row.querySelector('.item-qty').value),
+                unit: row.querySelector('.item-unit').value,
+                rate: parseFloat(row.querySelector('.item-rate').value),
+                netAmount: parseFloat(row.querySelector('.item-net-amount').value)
+            });
+        });
+
+        const formData = {
+            id: salesRecords.length > 0 ? Math.max(...salesRecords.map(s => s.id)) + 1 : 1,
+            date: dateInput.value,
+            salesInvoiceNo: salesInvoiceNoInput.value,
+            description: descriptionInput.value,
+            attachment: attachmentInput.value,
+            customerCode: customerCodeSelect.value,
+            customerName: customerNameSelect.value,
+            customerAddress: customerAddressInput.value,
+            telephone: telephoneInput.value,
+            termsOfPayment: termsOfPaymentSelect.value,
+            salesItems: salesItems,
+            totalQuantity: parseFloat(totalQuantitySpan.textContent),
+            grossAmount: parseFloat(grossAmountSpan.textContent),
+            discount: parseFloat(discountInput.value),
+            cashReceived: parseFloat(cashReceivedInput.value),
+            finalNetAmount: parseFloat(finalNetAmountSpan.textContent)
+        };
+
+        if (currentEditIndex === -1) {
+            salesRecords.push(formData);
+            Swal.fire('Saved!', 'New sales record has been added.', 'success');
+        } else {
+            salesRecords[currentEditIndex] = formData;
+            Swal.fire('Updated!', 'Sales record has been updated.', 'success');
         }
-        if (rateInput) {
-            rateInput.addEventListener('input', () => calculateRowNetAmount(row));
-        }
 
-        if (deleteButton) {
-            deleteButton.addEventListener('click', function() {
+        localStorage.setItem('salesRecords', JSON.stringify(salesRecords));
+        renderSalesList();
+        resetForm();
+    };
+
+    mainSalesForm.addEventListener('submit', saveSalesRecord);
+    updateSalesButton.addEventListener('click', saveSalesRecord);
+
+    discountInput.addEventListener('input', updateCalculations);
+    cashReceivedInput.addEventListener('input', updateCalculations);
+
+    addTermButton.addEventListener('click', () => {
+        const newTerm = newTermInput.value.trim();
+        if (newTerm) {
+            const option = document.createElement('option');
+            option.value = newTerm;
+            option.textContent = newTerm;
+            termsOfPaymentSelect.appendChild(option);
+            newTermInput.value = '';
+            const modal = bootstrap.Modal.getInstance(document.getElementById('termsModal'));
+            modal.hide();
+            Swal.fire('Added!', 'New term of payment has been added.', 'success');
+        } else {
+            Swal.fire('Error!', 'Please enter a term of payment.', 'error');
+        }
+    });
+
+    confirmClearFormButton.addEventListener('click', () => {
+        resetForm();
+        const modal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteModal'));
+        modal.hide();
+        Swal.fire('Cleared!', 'The form has been cleared.', 'info');
+    });
+
+    const renderSalesList = () => {
+        salesListTableBody.innerHTML = '';
+        if (salesRecords.length === 0) {
+            noEntriesMessage.style.display = 'block';
+            return;
+        }
+        noEntriesMessage.style.display = 'none';
+
+        salesRecords.forEach((record, index) => {
+            const row = salesListTableBody.insertRow();
+            row.innerHTML = `
+                <td>${record.id}</td>
+                <td>${record.date}</td>
+                <td>${record.salesInvoiceNo}</td>
+                <td>${record.customerName}</td>
+                <td>${record.grossAmount.toFixed(2)}</td>
+                <td>${record.discount.toFixed(2)}</td>
+                <td>${record.cashReceived.toFixed(2)}</td>
+                <td>${record.finalNetAmount.toFixed(2)}</td>
+                <td>
+                    <button type="button" class="btn btn-primary btn-sm view-btn" data-index="${index}"><i class="bi bi-eye"></i> View</button>
+                    <button type="button" class="btn btn-info btn-sm edit-btn" data-index="${index}"><i class="bi bi-pencil"></i> Edit</button>
+                    <button type="button" class="btn btn-danger btn-sm delete-btn" data-index="${index}"><i class="bi bi-trash"></i> Delete</button>
+                </td>
+            `;
+        });
+
+        document.querySelectorAll('.view-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const index = e.target.dataset.index;
+                viewSalesRecord(salesRecords[index]);
+            });
+        });
+
+        document.querySelectorAll('.edit-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const index = e.target.dataset.index;
+                editSalesRecord(index);
+            });
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const index = e.target.dataset.index;
                 Swal.fire({
                     title: 'Are you sure?',
                     text: "You won't be able to revert this!",
@@ -105,867 +258,413 @@ document.addEventListener('DOMContentLoaded', function () {
                     confirmButtonText: 'Yes, delete it!'
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        row.remove();
-                        updateAllTotals(); 
-                        Swal.fire(
-                            'Deleted!',
-                            'Your item has been deleted.',
-                            'success'
-                        );
+                        salesRecords.splice(index, 1);
+                        localStorage.setItem('salesRecords', JSON.stringify(salesRecords));
+                        renderSalesList();
+                        Swal.fire('Deleted!', 'The sales record has been deleted.', 'success');
                     }
                 });
             });
-        }
-    }
-
-
-    function setFormFieldsReadonly(readonly) {
-        const excludedButtons = [
-            'addTermButton', 'addItemButton', 'submitSalesButton', 'updateSalesButton',
-            'printFormButton', 'clearFormButton', 'listButton', 'listButtonBack',
-            'exportButtonForm', 'exportButtonList', 'exportPdfButton', 'exportExcelButton', 'exportWhatsappButton', 'exportEmailButton', 
-            'backToDashboardButton', 'backToDashboardButtonList'
-        ];
-
-        const formElements = mainSalesFormElement.querySelectorAll('input, select, textarea, button');
-        formElements.forEach(element => {
-            if (excludedButtons.includes(element.id)) {
-                return;
-            }
-            if (element.id === 'salesInvoiceNo') {
-                 element.setAttribute('readonly', 'readonly');
-                 element.setAttribute('tabindex', '-1');
-                 return;
-            }
-
-            if (readonly) {
-                element.setAttribute('readonly', 'readonly');
-                element.setAttribute('tabindex', '-1');
-                if (element.tagName === 'SELECT') {
-                    element.style.pointerEvents = 'none';
-                }
-            } else {
-                element.removeAttribute('readonly');
-                element.removeAttribute('tabindex');
-                if (element.tagName === 'SELECT') {
-                    element.style.pointerEvents = 'auto';
-                }
-            }
         });
+    };
 
-        const deleteRowButtons = salesItemsTableBody.querySelectorAll('.delete-row');
-        if (readonly) {
-            addItemButton.style.display = 'none';
-            deleteRowButtons.forEach(btn => btn.style.display = 'none');
-            discountInput.setAttribute('readonly', 'readonly');
-            cashReceivedInput.setAttribute('readonly', 'readonly');
-
-        } else {
-            addItemButton.style.display = 'inline-block';
-            deleteRowButtons.forEach(btn => btn.style.display = 'inline-block');
-            discountInput.removeAttribute('readonly');
-            cashReceivedInput.removeAttribute('readonly');
-        }
-    }
-
-    function populateFormWithData(record, readonly = false) {
-        document.getElementById('date').value = record.date;
-        salesInvoiceNoInput.value = record.salesInvoiceNo; 
-        document.getElementById('description').value = record.description;
-
-        document.getElementById('customerCode').value = record.customerCode;
-        document.getElementById('customerName').value = record.customerName;
-
-        document.getElementById('customerAddress').value = record.customerAddress;
-        document.getElementById('telephone').value = record.telephone;
-
-        const termsSelect = document.getElementById('termsOfPayment');
-        if (!Array.from(termsSelect.options).some(option => option.value === record.termsOfPayment)) {
-            const newOption = document.createElement('option');
-            newOption.value = record.termsOfPayment;
-            newOption.textContent = record.termsOfPayment;
-            termsSelect.appendChild(newOption);
-        }
-        termsSelect.value = record.termsOfPayment;
+    const populateFormWithData = (data) => {
+        dateInput.value = data.date;
+        salesInvoiceNoInput.value = data.salesInvoiceNo;
+        descriptionInput.value = data.description;
+        attachmentInput.value = data.attachment;
+        customerCodeSelect.value = data.customerCode;
+        customerNameSelect.value = data.customerName;
+        customerAddressInput.value = data.customerAddress;
+        telephoneInput.value = data.telephone;
+        termsOfPaymentSelect.value = data.termsOfPayment;
 
         salesItemsTableBody.innerHTML = '';
-        record.items.forEach(item => {
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td><input type="text" class="form-control item-code" value="${item.itemCode}" ${readonly ? 'readonly' : ''}></td>
-                <td>
-                    <select class="form-select item-description" ${readonly ? 'readonly style="pointer-events: none;"' : ''}>
-                        <option value="${item.description}" selected>${item.description}</option>
-                        <option>Laptop</option>
-                        <option>Monitor</option>
-                        <option>Keyboard</option>
-                        <option>Mouse</option>
-                        <option>Printer</option>
-                    </select>
-                </td>
-                <td><input type="number" class="form-control item-qty" value="${item.qty}" min="1" ${readonly ? 'readonly' : ''}></td>
-                <td><input type="text" class="form-control item-unit" value="${item.unit}" ${readonly ? 'readonly' : ''}></td>
-                <td><input type="number" class="form-control item-rate" value="${item.rate}" min="0" ${readonly ? 'readonly' : ''}></td>
-                <td><input type="number" class="form-control item-net-amount" readonly value="${item.netAmount.toFixed(2)}"></td>
-                <td>
-                    <button type="button" class="btn btn-danger btn-sm delete-row" ${readonly ? 'style="display: none;"' : ''}>Delete</button>
-                </td>
-            `;
-            salesItemsTableBody.appendChild(newRow);
-            if (!readonly) {
-                attachRowEventListeners(newRow);
-            }
-        });
+        data.salesItems.forEach(item => addItemRow(item));
 
-        discountInput.value = record.discount || 0;
-        cashReceivedInput.value = record.cashReceived || 0;
+        discountInput.value = data.discount;
+        cashReceivedInput.value = data.cashReceived;
+        updateCalculations();
+    };
 
-        updateAllTotals(); 
-
-        setFormFieldsReadonly(readonly);
-    }
-
-    function resetForm() {
-        mainSalesFormElement.reset();
-        currentMode = 'add';
-        editingRecordId = null;
-
-        salesInvoiceNoInput.value = nextInvoiceNumber;
-
-        salesItemsTableBody.innerHTML = `
+    const viewSalesRecord = (record) => {
+        let itemsHtml = record.salesItems.map(item => `
             <tr>
-                <td>
-                    <input type="text" class="form-control item-code" value="ITM001">
-                </td>
-                <td>
-                    <select class="form-select item-description">
-                        <option selected>Select Description</option>
-                        <option>Laptop</option>
-                        <option>Monitor</option>
-                        <option>Keyboard</option>
-                        <option>Mouse</option>
-                        <option>Printer</option>
-                    </select>
-                </td>
-                <td><input type="number" class="form-control item-qty" value="1" min="1"></td>
-                <td><input type="text" class="form-control item-unit" value="Unit"></td>
-                <td><input type="number" class="form-control item-rate" value="1000" min="0"></td>
-                <td><input type="number" class="form-control item-net-amount" readonly value="1000"></td>
-                <td>
-                    <button type="button" class="btn btn-danger btn-sm delete-row">Delete</button>
-                </td>
+                <td>${item.itemCode}</td>
+                <td>${item.description}</td>
+                <td>${item.qty}</td>
+                <td>${item.unit}</td>
+                <td>${item.rate.toFixed(2)}</td>
+                <td>${item.netAmount.toFixed(2)}</td>
             </tr>
-        `;
-        attachRowEventListeners(salesItemsTableBody.querySelector('tr'));
+        `).join('');
 
-        discountInput.value = '0';
-        cashReceivedInput.value = '0';
-
-        updateAllTotals(); 
-
-        setFormFieldsReadonly(false);
-        submitSalesButton.style.display = 'inline-block';
-        updateSalesButton.style.display = 'none';
-        clearFormButton.style.display = 'inline-block';
-        addItemButton.style.display = 'inline-block';
-    }
-
-    function setFormMode(mode, record = null) {
-        currentMode = mode;
-        if (mode === 'add') {
-            resetForm();
-            salesFormContainer.style.display = 'block'; 
-            salesListContainer.style.display = 'none';
-
-            backToDashboardButton.style.display = 'inline-block';
-            listButton.style.display = 'inline-block'; 
-            exportButtonForm.style.display = 'inline-block';
-            listButtonBack.style.display = 'none';
-            backToDashboardButtonList.style.display = 'none';
-            exportButtonList.style.display = 'none';
-
-        } else if (mode === 'edit') {
-            if (!record) {
-                console.error("Record is required for edit mode.");
-                return;
-            }
-            editingRecordId = record.id;
-            populateFormWithData(record, false);
-            salesFormContainer.style.display = 'block'; 
-            salesListContainer.style.display = 'none';
-
-            
-            backToDashboardButton.style.display = 'inline-block';
-            listButton.style.display = 'none'; 
-            exportButtonForm.style.display = 'inline-block';
-            listButtonBack.style.display = 'none';
-            backToDashboardButtonList.style.display = 'none';
-            exportButtonList.style.display = 'none';
-
-            submitSalesButton.style.display = 'none';
-            updateSalesButton.style.display = 'inline-block';
-            clearFormButton.style.display = 'inline-block';
-            addItemButton.style.display = 'inline-block';
-        } else if (mode === 'view') {
-            if (!record) {
-                console.error("Record is required for view mode.");
-                return;
-            }
-            editingRecordId = record.id;
-            populateFormWithData(record, true);
-            salesFormContainer.style.display = 'block'; 
-            salesListContainer.style.display = 'none';
-
-            backToDashboardButton.style.display = 'inline-block';
-            listButton.style.display = 'none'; 
-            exportButtonForm.style.display = 'inline-block'; 
-            listButtonBack.style.display = 'none';
-            backToDashboardButtonList.style.display = 'none';
-            exportButtonList.style.display = 'none';
-
-            submitSalesButton.style.display = 'none';
-            updateSalesButton.style.display = 'none';
-            clearFormButton.style.display = 'none';
-            addItemButton.style.display = 'none';
-        } else if (mode === 'list') {
-            salesFormContainer.style.display = 'none'; 
-            salesListContainer.style.display = 'block';
-
-            backToDashboardButton.style.display = 'none';
-            listButton.style.display = 'none'; 
-            exportButtonForm.style.display = 'none'; 
-            backToDashboardButtonList.style.display = 'inline-block';
-            listButtonBack.style.display = 'inline-block';
-            exportButtonList.style.display = 'inline-block'; 
-
-            renderSalesList();
-        }
-    }
-
-    function exportSalesToExcel() {
-        if (salesRecords.length === 0) {
-            Swal.fire('No Data', 'There are no sales records to export.', 'info');
-            return;
-        }
-
-        const dataForExcel = salesRecords.map(record => {
-            const itemsSummary = record.items.map(item =>
-                `${item.description} (Qty: ${item.qty}, Rate: ${item.rate})`
-            ).join('; ');
-
-            return {
-                'ID': record.id,
-                'Date': record.date,
-                'Invoice No.': record.salesInvoiceNo,
-                'Description (Overall)': record.description,
-                'Customer Code': record.customerCode,
-                'Customer Name': record.customerName,
-                'Customer Address': record.customerAddress,
-                'Telephone': record.telephone,
-                'Terms of Payment': record.termsOfPayment,
-                'Items Details': itemsSummary,
-                'Gross Amount': record.grossAmount,
-                'Discount': record.discount,
-                'Cash Received': record.cashReceived,
-                'Final Net Amount': record.finalNetAmount
-            };
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Sales Records');
-
-        const date = new Date();
-        const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-        const filename = `Sales_Records_${dateString}.xlsx`;
-
-        XLSX.writeFile(workbook, filename);
-        exportOptionsModal.hide();
-        Swal.fire('Export Successful', `Sales data exported to "${filename}"`, 'success');
-    }
-
-    async function downloadSalesPdf() {
-        if (salesRecords.length === 0) {
-            Swal.fire('No Data', 'There are no sales records to download as PDF.', 'info');
-            return;
-        }
-
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-
-        doc.setFontSize(18);
-        doc.text("Sales Records Summary", 14, 22);
-
-        const headers = [
-            'ID', 'Date', 'Invoice No.', 'Customer Name',
-            'Gross Amt', 'Discount', 'Cash Rec.', 'Net Amt'
-        ];
-
-        const data = salesRecords.map(record => [
-            record.id,
-            record.date,
-            record.salesInvoiceNo,
-            record.customerName,
-            record.grossAmount.toFixed(2),
-            record.discount.toFixed(2),
-            record.cashReceived.toFixed(2),
-            record.finalNetAmount.toFixed(2)
-        ]);
-
-        doc.autoTable({
-            startY: 30, 
-            head: [headers],
-            body: data,
-            theme: 'striped', 
-            headStyles: { fillColor: [20, 140, 200] }, 
-            margin: { top: 10 }
-        });
-
-        const finalY = doc.autoTable.previous.finalY;
-        doc.setFontSize(10);
-        doc.text(`Generated on: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, finalY + 10);
-        doc.text("Note: This PDF provides a summary of sales records.", 14, finalY + 16);
-
-
-        
-        const date = new Date();
-        const dateString = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-        const filename = `Sales_Summary_${dateString}.pdf`;
-
-        doc.save(filename);
-        exportOptionsModal.hide(); 
-        Swal.fire('Download Successful', `Sales summary downloaded as "${filename}"`, 'success');
-    }
-
-    function exportSalesToWhatsApp() {
-        if (salesRecords.length === 0) {
-            Swal.fire('No Data', 'There are no sales records to share via WhatsApp.', 'info');
-            return;
-        }
-
-        const messageParts = [];
-        messageParts.push("Sales Records Summary:");
-        messageParts.push("---------------------");
-
-        salesRecords.forEach((record, index) => {
-            messageParts.push(`\nRecord ${index + 1}:`);
-            messageParts.push(`Invoice No: ${record.salesInvoiceNo}`);
-            messageParts.push(`Date: ${record.date}`);
-            messageParts.push(`Customer: ${record.customerName}`);
-            messageParts.push(`Net Amount: Rs. ${record.finalNetAmount.toFixed(2)}`);
-        });
-
-        const fullMessage = messageParts.join('\n');
-
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(fullMessage)}`;
-
-        window.open(whatsappUrl, '_blank');
-
-        exportOptionsModal.hide(); 
         Swal.fire({
-            icon: 'info',
-            title: 'Sharing via WhatsApp',
-            text: 'A new window/tab will open to share the sales summary on WhatsApp. Please note this only prepares the message; you need to send it from WhatsApp.',
-            showConfirmButton: true
-        });
-    }
-
-    function exportSalesToEmail() {
-        if (salesRecords.length === 0) {
-            Swal.fire('No Data', 'There are no sales records to export via email.', 'info');
-            return;
-        }
-
-        const subject = encodeURIComponent("Sales Records Summary from Your Application");
-        let bodyParts = ["Dear Sir/Madam,", "\n\nPlease find the summary of sales records below:\n"];
-
-        salesRecords.forEach((record, index) => {
-            bodyParts.push(`--- Sales Record ${index + 1} ---`);
-            bodyParts.push(`Invoice No: ${record.salesInvoiceNo}`);
-            bodyParts.push(`Date: ${record.date}`);
-            bodyParts.push(`Customer Name: ${record.customerName}`);
-            bodyParts.push(`Gross Amount: Rs. ${record.grossAmount.toFixed(2)}`);
-            bodyParts.push(`Discount: Rs. ${record.discount.toFixed(2)}`);
-            bodyParts.push(`Cash Received: Rs. ${record.cashReceived.toFixed(2)}`);
-            bodyParts.push(`Final Net Amount: Rs. ${record.finalNetAmount.toFixed(2)}`);
-            bodyParts.push(`\n`); 
-        });
-
-        bodyParts.push("Regards,\nYour Sales Team");
-
-        const fullBody = encodeURIComponent(bodyParts.join('\n'));
-        const mailtoLink = `mailto:?subject=${subject}&body=${fullBody}`;
-
-        window.location.href = mailtoLink; 
-
-        exportOptionsModal.hide(); 
-        Swal.fire({
-            icon: 'info',
-            title: 'Opening Email Client',
-            text: 'Your default email client will open with the sales summary pre-filled. You can then add recipients and send the email.',
-            showConfirmButton: true
-        });
-    }
-
-
-    addItemButton.addEventListener('click', function () {
-        const newRowElement = document.createElement('tr');
-        newRowElement.innerHTML = `
-            <td><input type="text" class="form-control item-code" value=""></td>
-            <td>
-                <select class="form-select item-description">
-                    <option selected>Select Description</option>
-                    <option>Laptop</option>
-                    <option>Monitor</option>
-                    <option>Keyboard</option>
-                    <option>Mouse</option>
-                    <option>Printer</option>
-                </select>
-            </td>
-            <td><input type="number" class="form-control item-qty" value="1" min="1"></td>
-            <td><input type="text" class="form-control item-unit" value="Unit"></td>
-            <td><input type="number" class="form-control item-rate" value="0" min="0"></td>
-            <td><input type="number" class="form-control item-net-amount" readonly value="0"></td>
-            <td>
-                <button type="button" class="btn btn-danger btn-sm delete-row">Delete</button>
-            </td>
-        `;
-        salesItemsTableBody.appendChild(newRowElement);
-        attachRowEventListeners(newRowElement); 
-        calculateRowNetAmount(newRowElement);
-    });
-
-    salesItemsTableBody.addEventListener('input', function (event) {
-        const target = event.target;
-        if (target.classList.contains('item-qty') || target.classList.contains('item-rate')) {
-            const row = target.closest('tr');
-            calculateRowNetAmount(row);
-        }
-    });
-
-    discountInput.addEventListener('input', updateAllTotals);
-    cashReceivedInput.addEventListener('input', updateAllTotals);
-
-
-    addTermButton.addEventListener('click', function () {
-        const newTerm = newTermInput.value.trim();
-        if (newTerm) {
-            const newOption = document.createElement('option');
-            newOption.value = newTerm;
-            newOption.textContent = newTerm;
-            termsOfPaymentSelect.appendChild(newOption);
-            newTermInput.value = '';
-
-            const termsModal = bootstrap.Modal.getInstance(document.getElementById('termsModal'));
-            if (termsModal) {
-                termsModal.hide();
-            }
-            Swal.fire({
-                icon: 'success',
-                title: 'Term Added!',
-                text: `"${newTerm}" has been added to terms of payment.`
-            });
-        } else {
-            Swal.fire({
-                icon: 'error',
-                title: 'Input Error',
-                text: 'Please enter a term.'
-            });
-        }
-    });
-
-    function renderSalesList() {
-        salesListTableBody.innerHTML = '';
-        if (salesRecords.length === 0) {
-            noEntriesMessage.style.display = 'block';
-            salesListTableBody.innerHTML = '';
-            return;
-        } else {
-            noEntriesMessage.style.display = 'none';
-        }
-
-        salesRecords.forEach(record => {
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td>${record.id}</td>
-                <td>${record.date}</td>
-                <td>${record.salesInvoiceNo}</td>
-                <td>${record.customerName || 'N/A'}</td>
-                <td>Rs. ${record.grossAmount.toFixed(2)}</td>
-                <td>Rs. ${record.discount.toFixed(2)}</td>
-                <td>Rs. ${record.cashReceived.toFixed(2)}</td>
-                <td>Rs. ${record.finalNetAmount.toFixed(2)}</td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-success me-1 view-record" data-id="${record.id}"><i class="bi bi-eye"></i> View</button>
-                    <button type="button" class="btn btn-sm btn-primary me-1 edit-record" data-id="${record.id}"><i class="bi bi-pencil"></i> Edit</button>
-                    <button type="button" class="btn btn-sm btn-info me-1 print-record" data-id="${record.id}"><i class="bi bi-printer"></i> Print</button>
-                    <button type="button" class="btn btn-sm btn-danger delete-sales-record" data-id="${record.id}"><i class="bi bi-trash"></i> Delete</button>
-                </td>
-            `;
-            salesListTableBody.appendChild(newRow);
-        });
-
-        salesListTableBody.querySelectorAll('.delete-sales-record').forEach(button => {
-            button.addEventListener('click', function() {
-                const idToDelete = parseInt(this.dataset.id);
-                Swal.fire({
-                    title: 'Are you sure?',
-                    text: "You want to delete this sales record?",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Yes, delete it!'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        salesRecords = salesRecords.filter(record => record.id !== idToDelete);
-                        renderSalesList();
-                        Swal.fire(
-                            'Deleted!',
-                            'The sales record has been deleted.',
-                            'success'
-                        );
-                    }
-                });
-            });
-        });
-
-        salesListTableBody.querySelectorAll('.view-record').forEach(button => {
-            button.addEventListener('click', function() {
-                const idToView = parseInt(this.dataset.id);
-                const recordToView = salesRecords.find(record => record.id === idToView);
-                if (recordToView) {
-                    setFormMode('view', recordToView);
-                } else {
-                    Swal.fire('Error', 'Record not found for viewing.', 'error');
-                }
-            });
-        });
-
-        salesListTableBody.querySelectorAll('.edit-record').forEach(button => {
-            button.addEventListener('click', function() {
-                const idToEdit = parseInt(this.dataset.id);
-                const recordToEdit = salesRecords.find(record => record.id === idToEdit);
-                if (recordToEdit) {
-                    setFormMode('edit', recordToEdit);
-                } else {
-                    Swal.fire('Error', 'Record not found for editing.', 'error');
-                }
-            });
-        });
-
-        salesListTableBody.querySelectorAll('.print-record').forEach(button => {
-            button.addEventListener('click', function() {
-                const idToPrint = parseInt(this.dataset.id);
-                printSalesRecord(idToPrint);
-            });
-        });
-    }
-
-    function printSalesRecord(recordId) {
-        const record = salesRecords.find(rec => rec.id === recordId);
-        if (!record) {
-            Swal.fire('Error', 'Sales record not found for printing.', 'error');
-            return;
-        }
-
-        const totalQuantity = record.items.reduce((sum, item) => sum + item.qty, 0);
-
-        let printContent = `
-            <html>
-            <head>
-                <title>Sales Record #${record.salesInvoiceNo}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    h2 { color: #333; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                    th { background-color: #f2f2f2; }
-                    .details p { margin: 5px 0; }
-                    .total { font-weight: bold; text-align: right; padding-right: 10px; }
-                </style>
-            </head>
-            <body>
-                <h2>Sales Record Details - Invoice No: ${record.salesInvoiceNo}</h2>
-                <div class="details">
+            title: `Sales Invoice: ${record.salesInvoiceNo}`,
+            html: `
+                <div class="text-start">
                     <p><strong>Date:</strong> ${record.date}</p>
-                    <p><strong>Sales Invoice No:</strong> ${record.salesInvoiceNo || 'N/A'}</p>
-                    <p><strong>Description (Overall):</strong> ${record.description || 'N/A'}</p>
-                    <p><strong>Customer Name:</strong> ${record.customerName || 'N/A'} (Code: ${record.customerCode || 'N/A'})</p>
-                    <p><strong>Customer Address:</strong> ${record.customerAddress || 'N/A'}</p>
-                    <p><strong>Telephone:</strong> ${record.telephone || 'N/A'}</p>
-                    <p><strong>Terms of Payment:</strong> ${record.termsOfPayment || 'N/A'}</p>
-                </div>
-
-                <h3>Sales Items:</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Item Code</th>
-                            <th>Description</th>
-                            <th>Qty</th>
-                            <th>Unit</th>
-                            <th>Rate</th>
-                            <th>Net Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${record.items.map(item => `
+                    <p><strong>Description:</strong> ${record.description}</p>
+                    <p><strong>Attachment:</strong> ${record.attachment}</p>
+                    <p><strong>Customer:</strong> ${record.customerName} (${record.customerCode})</p>
+                    <p><strong>Address:</strong> ${record.customerAddress}</p>
+                    <p><strong>Telephone:</strong> ${record.telephone}</p>
+                    <p><strong>Terms of Payment:</strong> ${record.termsOfPayment}</p>
+                    <h5>Items:</h5>
+                    <table class="table table-bordered table-sm">
+                        <thead>
                             <tr>
-                                <td>${item.itemCode}</td>
-                                <td>${item.description}</td>
-                                <td>${item.qty}</td>
-                                <td>${item.unit}</td>
-                                <td>${item.rate.toFixed(2)}</td>
-                                <td>${item.netAmount.toFixed(2)}</td>
+                                <th>Code</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Unit</th>
+                                <th>Rate</th>
+                                <th>Net Amount</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="2" class="total">Total Quantity:</td>
-                            <td>${totalQuantity}</td>
-                            <td colspan="2" class="total">Gross Amount:</td>
-                            <td>Rs. ${record.grossAmount.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" class="total">Discount:</td>
-                            <td>Rs. ${record.discount.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" class="total">Cash Received:</td>
-                            <td>Rs. ${record.cashReceived.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" class="total">Final Net Amount:</td>
-                            <td>Rs. ${record.finalNetAmount.toFixed(2)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </body>
-            </html>
-        `;
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+                    <p><strong>Total Quantity:</strong> ${record.totalQuantity}</p>
+                    <p><strong>Gross Amount:</strong> ${record.grossAmount.toFixed(2)}</p>
+                    <p><strong>Discount:</strong> ${record.discount.toFixed(2)}</p>
+                    <p><strong>Cash Received:</strong> ${record.cashReceived.toFixed(2)}</p>
+                    <p class="fs-5 fw-bold">Final Net Amount: ${record.finalNetAmount.toFixed(2)}</p>
+                </div>
+            `,
+            width: '80%',
+            confirmButtonText: 'Close'
+        });
+    };
 
-        const printWindow = window.open('', '_blank');
-        printWindow.document.open();
-        printWindow.document.write(printContent);
+    const editSalesRecord = (index) => {
+        currentEditIndex = index;
+        const recordToEdit = salesRecords[index];
+        populateFormWithData(recordToEdit);
+        salesFormContainer.style.display = 'block';
+        salesListContainer.style.display = 'none';
+        submitSalesButton.style.display = 'none';
+        updateSalesButton.style.display = 'block';
+        window.scrollTo(0, 0);
+    };
+
+    listButton.addEventListener('click', () => {
+        salesFormContainer.style.display = 'none';
+        salesListContainer.style.display = 'block';
+        renderSalesList();
+    });
+
+    listButtonBack.addEventListener('click', () => {
+        salesFormContainer.style.display = 'block';
+        salesListContainer.style.display = 'none';
+        resetForm();
+    });
+
+    backToDashboardButton.addEventListener('click', () => {
+        Swal.fire({
+            title: 'Go to Dashboard',
+            text: 'Are you sure you want to go back to the dashboard? Any unsaved changes will be lost.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, go to Dashboard'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = 'dashboard.html';
+            }
+        });
+    });
+
+    backToDashboardButtonList.addEventListener('click', () => {
+        window.location.href = 'dashboard.html';
+    });
+
+    printFormButton.addEventListener('click', () => {
+        printSalesRecord(getFormData());
+    });
+
+    function getFormData() {
+        const salesItems = [];
+        salesItemsTableBody.querySelectorAll('tr').forEach(row => {
+            salesItems.push({
+                itemCode: row.querySelector('.item-code').value,
+                description: row.querySelector('.item-description').value,
+                qty: parseFloat(row.querySelector('.item-qty').value),
+                unit: row.querySelector('.item-unit').value,
+                rate: parseFloat(row.querySelector('.item-rate').value),
+                netAmount: parseFloat(row.querySelector('.item-net-amount').value)
+            });
+        });
+
+        return {
+            date: dateInput.value,
+            salesInvoiceNo: salesInvoiceNoInput.value,
+            description: descriptionInput.value,
+            attachment: attachmentInput.value,
+            customerCode: customerCodeSelect.value,
+            customerName: customerNameSelect.value,
+            customerAddress: customerAddressInput.value,
+            telephone: telephoneInput.value,
+            termsOfPayment: termsOfPaymentSelect.value,
+            salesItems: salesItems,
+            totalQuantity: parseFloat(totalQuantitySpan.textContent),
+            grossAmount: parseFloat(grossAmountSpan.textContent),
+            discount: parseFloat(discountInput.value),
+            cashReceived: parseFloat(cashReceivedInput.value),
+            finalNetAmount: parseFloat(finalNetAmountSpan.textContent)
+        };
+    }
+
+    function printSalesRecord(record) {
+        const printWindow = window.open('', '', 'height=700,width=900');
+        printWindow.document.write('<html><head><title>Sales Invoice</title>');
+        printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">');
+        printWindow.document.write('<style>');
+        printWindow.document.write(`
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h2 { text-align: center; color: #0d6efd; margin-bottom: 20px; }
+            .section-title { font-weight: bold; margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            .info-row span:first-child { font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .total-section { margin-top: 20px; text-align: right; }
+            .total-section div { margin-bottom: 5px; }
+            .total-section strong { font-size: 1.1em; }
+        `);
+        printWindow.document.write('</style></head><body>');
+        printWindow.document.write('<div class="container">');
+        printWindow.document.write('<h2 class="text-primary">Sales Invoice</h2>');
+
+        printWindow.document.write('<div class="row">');
+        printWindow.document.write(`<div class="col-6">`);
+        printWindow.document.write(`<p><strong>Date:</strong> ${record.date}</p>`);
+        printWindow.document.write(`</div>`);
+        printWindow.document.write(`<div class="col-6 text-end">`);
+        printWindow.document.write(`<p><strong>Invoice No.:</strong> ${record.salesInvoiceNo}</p>`);
+        printWindow.document.write(`</div>`);
+        printWindow.document.write(`</div>`);
+
+        printWindow.document.write(`<p><strong>Description:</strong> ${record.description}</p>`);
+        printWindow.document.write(`<p><strong>Attachment:</strong> ${record.attachment}</p>`);
+
+        printWindow.document.write('<div class="section-title">Customer Details</div>');
+        printWindow.document.write(`<p><strong>Customer Code:</strong> ${record.customerCode}</p>`);
+        printWindow.document.write(`<p><strong>Customer Name:</strong> ${record.customerName}</p>`);
+        printWindow.document.write(`<p><strong>Address:</strong> ${record.customerAddress}</p>`);
+        printWindow.document.write(`<p><strong>Telephone:</strong> ${record.telephone}</p>`);
+        printWindow.document.write(`<p><strong>Terms of Payment:</strong> ${record.termsOfPayment}</p>`);
+
+        printWindow.document.write('<div class="section-title">Sales Items</div>');
+        printWindow.document.write('<table class="table table-bordered table-sm">');
+        printWindow.document.write('<thead><tr><th>Item Code</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Net Amount</th></tr></thead>');
+        printWindow.document.write('<tbody>');
+        record.salesItems.forEach(item => {
+            printWindow.document.write(`
+                <tr>
+                    <td>${item.itemCode}</td>
+                    <td>${item.description}</td>
+                    <td>${item.qty}</td>
+                    <td>${item.unit}</td>
+                    <td>${item.rate.toFixed(2)}</td>
+                    <td>${item.netAmount.toFixed(2)}</td>
+                </tr>
+            `);
+        });
+        printWindow.document.write('</tbody></table>');
+
+        printWindow.document.write('<div class="total-section">');
+        printWindow.document.write(`<div><strong>Total Quantity:</strong> ${record.totalQuantity}</div>`);
+        printWindow.document.write(`<div><strong>Gross Amount:</strong> ${record.grossAmount.toFixed(2)}</div>`);
+        printWindow.document.write(`<div><strong>Discount:</strong> ${record.discount.toFixed(2)}</div>`);
+        printWindow.document.write(`<div><strong>Cash Received:</strong> ${record.cashReceived.toFixed(2)}</div>`);
+        printWindow.document.write(`<div><strong>Final Net Amount:</strong> ${record.finalNetAmount.toFixed(2)}</div>`);
+        printWindow.document.write('</div>');
+
+        printWindow.document.write('</div></body></html>');
         printWindow.document.close();
         printWindow.focus();
         printWindow.print();
     }
 
-    submitSalesButton.addEventListener('click', function (e) {
-        e.preventDefault();
+    exportButtonForm.addEventListener('click', () => {
+        const currentData = getFormData();
+        if (!currentData.salesInvoiceNo) {
+            Swal.fire('No Data', 'Please fill the form to export current sales record.', 'warning');
+            return;
+        }
+        document.getElementById('exportPdfButton').onclick = () => downloadSalesPdf([currentData]);
+        document.getElementById('exportExcelButton').onclick = () => exportSalesToExcel([currentData]);
+        document.getElementById('exportEmailButton').onclick = () => exportSalesToEmail([currentData]);
+        document.getElementById('exportWhatsappButton').onclick = () => exportSalesToWhatsApp([currentData]);
+    });
 
-        const formData = {
-            id: nextSalesId++,
-            date: document.getElementById('date').value,
-            salesInvoiceNo: salesInvoiceNoInput.value, 
-            description: document.getElementById('description').value,
-            customerCode: document.getElementById('customerCode').value,
-            customerName: document.getElementById('customerName').value,
-            customerAddress: document.getElementById('customerAddress').value,
-            telephone: document.getElementById('telephone').value,
-            termsOfPayment: document.getElementById('termsOfPayment').value,
-            items: [],
-            grossAmount: parseFloat(grossAmountField.textContent) || 0,
-            discount: parseFloat(discountInput.value) || 0,
-            cashReceived: parseFloat(cashReceivedInput.value) || 0,
-            finalNetAmount: parseFloat(finalNetAmountField.textContent) || 0
-        };
+    exportButtonList.addEventListener('click', () => {
+        if (salesRecords.length === 0) {
+            Swal.fire('No Data', 'There are no sales records in the list to export.', 'warning');
+            return;
+        }
+        document.getElementById('exportPdfButton').onclick = () => downloadSalesPdf(salesRecords);
+        document.getElementById('exportExcelButton').onclick = () => exportSalesToExcel(salesRecords);
+        document.getElementById('exportEmailButton').onclick = () => exportSalesToEmail(salesRecords);
+        document.getElementById('exportWhatsappButton').onclick = () => exportSalesToWhatsApp(salesRecords);
+    });
 
-        let isValid = true;
-        salesItemsTableBody.querySelectorAll('tr').forEach(row => {
-            const itemCode = row.querySelector('.item-code').value.trim();
-            const description = row.querySelector('.item-description').value;
-            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-            const unit = row.querySelector('.item-unit').value.trim();
-            const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
-            const netAmount = parseFloat(row.querySelector('.item-net-amount').value) || 0;
+    function downloadSalesPdf(records) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
 
-            if (!itemCode || description === 'Select Description' || qty <= 0 || rate < 0 || !unit) {
-                isValid = false;
+        records.forEach((record, recordIndex) => {
+            if (recordIndex > 0) {
+                doc.addPage();
             }
 
-            formData.items.push({
-                itemCode,
-                description,
-                qty,
-                unit,
-                rate,
-                netAmount
+            doc.setFontSize(18);
+            doc.text("Sales Invoice", 105, 20, null, null, "center");
+            doc.setFontSize(10);
+
+            let y = 30;
+            doc.text(`Date: ${record.date}`, 14, y);
+            doc.text(`Invoice No.: ${record.salesInvoiceNo}`, 14, y + 5);
+            doc.text(`Description: ${record.description}`, 14, y + 10);
+            doc.text(`Attachment: ${record.attachment}`, 14, y + 15);
+
+            y += 25;
+            doc.setFontSize(12);
+            doc.text("Customer Details", 14, y);
+            doc.setFontSize(10);
+            doc.text(`Customer Code: ${record.customerCode}`, 14, y + 5);
+            doc.text(`Customer Name: ${record.customerName}`, 14, y + 10);
+            doc.text(`Address: ${record.customerAddress}`, 14, y + 15);
+            doc.text(`Telephone: ${record.telephone}`, 14, y + 20);
+            doc.text(`Terms of Payment: ${record.termsOfPayment}`, 14, y + 25);
+
+            y += 35;
+            doc.setFontSize(12);
+            doc.text("Sales Items", 14, y);
+            doc.setFontSize(10);
+
+            const tableColumn = ["Item Code", "Description", "Qty", "Unit", "Rate", "Net Amount"];
+            const tableRows = record.salesItems.map(item => [
+                item.itemCode,
+                item.description,
+                item.qty,
+                item.unit,
+                item.rate.toFixed(2),
+                item.netAmount.toFixed(2)
+            ]);
+
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: y + 5,
+                theme: 'grid',
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [22, 160, 133], textColor: 255 },
+                margin: { top: 10 }
             });
+
+            y = doc.autoTable.previous.finalY + 10;
+
+            doc.setFontSize(10);
+            doc.text(`Total Quantity: ${record.totalQuantity}`, 14, y);
+            doc.text(`Gross Amount: ${record.grossAmount.toFixed(2)}`, 14, y + 5);
+            doc.text(`Discount: ${record.discount.toFixed(2)}`, 14, y + 10);
+            doc.text(`Cash Received: ${record.cashReceived.toFixed(2)}`, 14, y + 15);
+            doc.setFontSize(12);
+            doc.text(`Final Net Amount: ${record.finalNetAmount.toFixed(2)}`, 14, y + 25);
         });
 
-        if (!isValid) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: 'Please ensure all sales items have a valid item code, selected description, quantity (>0), rate (>=0), and unit.'
+        doc.save('sales_invoice.pdf');
+        Swal.fire('Exported!', 'Sales data exported to PDF.', 'success');
+    }
+
+    function exportSalesToExcel(records) {
+        const data = records.map(record => {
+            const items = record.salesItems.map(item =>
+                `Item Code: ${item.itemCode}, Description: ${item.description}, Qty: ${item.qty}, Unit: ${item.unit}, Rate: ${item.rate}, Net Amount: ${item.netAmount}`
+            ).join('; ');
+            return {
+                ID: record.id,
+                Date: record.date,
+                'Invoice No.': record.salesInvoiceNo,
+                Description: record.description,
+                Attachment: record.attachment,
+                'Customer Code': record.customerCode,
+                'Customer Name': record.customerName,
+                Address: record.customerAddress,
+                Telephone: record.telephone,
+                'Terms of Payment': record.termsOfPayment,
+                'Sales Items': items,
+                'Total Quantity': record.totalQuantity,
+                'Gross Amount': record.grossAmount,
+                Discount: record.discount,
+                'Cash Received': record.cashReceived,
+                'Final Net Amount': record.finalNetAmount
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Sales Records");
+        XLSX.writeFile(wb, "sales_records.xlsx");
+        Swal.fire('Exported!', 'Sales data exported to Excel.', 'success');
+    }
+
+    function exportSalesToEmail(records) {
+        const subject = 'Sales Invoice Data';
+        let body = 'Please find the sales invoice data attached or copied below:\n\n';
+
+        records.forEach(record => {
+            body += `Invoice No: ${record.salesInvoiceNo}\n`;
+            body += `Date: ${record.date}\n`;
+            body += `Description: ${record.description}\n`;
+            body += `Attachment: ${record.attachment}\n`;
+            body += `Customer Name: ${record.customerName}\n`;
+            body += `Gross Amount: ${record.grossAmount.toFixed(2)}\n`;
+            body += `Discount: ${record.discount.toFixed(2)}\n`;
+            body += `Cash Received: ${record.cashReceived.toFixed(2)}\n`;
+            body += `Final Net Amount: ${record.finalNetAmount.toFixed(2)}\n`;
+            body += `\nSales Items:\n`;
+            record.salesItems.forEach(item => {
+                body += `  - ${item.description} (Qty: ${item.qty}, Rate: ${item.rate.toFixed(2)}, Net: ${item.netAmount.toFixed(2)})\n`;
             });
-            return;
-        }
-
-        salesRecords.push(formData);
-        nextInvoiceNumber++; 
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Sales Added!',
-            text: 'Your sales invoice has been successfully added to the list.'
+            body += `\n---\n\n`;
         });
 
-        setFormMode('list'); 
-        resetForm(); 
-    });
+        const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.location.href = mailtoLink;
+        Swal.fire('Exported!', 'Sales data prepared for email.', 'success');
+    }
 
-    updateSalesButton.addEventListener('click', function () {
-        if (currentMode !== 'edit' || editingRecordId === null) {
-            Swal.fire('Error', 'No record is currently being edited.', 'error');
-            return;
-        }
+    function exportSalesToWhatsApp(records) {
+        let message = 'Sales Invoice Data:\n\n';
 
-        const recordIndex = salesRecords.findIndex(record => record.id === editingRecordId);
-        if (recordIndex === -1) {
-            Swal.fire('Error', 'Record not found for update.', 'error');
-            return;
-        }
-
-        const updatedData = {
-            id: editingRecordId,
-            date: document.getElementById('date').value,
-            salesInvoiceNo: salesInvoiceNoInput.value,
-            description: document.getElementById('description').value,
-            customerCode: document.getElementById('customerCode').value,
-            customerName: document.getElementById('customerName').value,
-            customerAddress: document.getElementById('customerAddress').value,
-            telephone: document.getElementById('telephone').value,
-            termsOfPayment: document.getElementById('termsOfPayment').value,
-            items: [],
-            grossAmount: parseFloat(grossAmountField.textContent) || 0,
-            discount: parseFloat(discountInput.value) || 0,
-            cashReceived: parseFloat(cashReceivedInput.value) || 0,
-            finalNetAmount: parseFloat(finalNetAmountField.textContent) || 0
-        };
-
-        let isValid = true;
-        salesItemsTableBody.querySelectorAll('tr').forEach(row => {
-            const itemCode = row.querySelector('.item-code').value.trim();
-            const description = row.querySelector('.item-description').value;
-            const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-            const unit = row.querySelector('.item-unit').value.trim();
-            const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
-            const netAmount = parseFloat(row.querySelector('.item-net-amount').value) || 0;
-
-            if (!itemCode || description === 'Select Description' || qty <= 0 || rate < 0 || !unit) {
-                isValid = false;
-            }
-
-            updatedData.items.push({
-                itemCode,
-                description,
-                qty,
-                unit,
-                rate,
-                netAmount
+        records.forEach(record => {
+            message += `*Invoice No:* ${record.salesInvoiceNo}\n`;
+            message += `*Date:* ${record.date}\n`;
+            message += `*Description:* ${record.description}\n`;
+            message += `*Attachment:* ${record.attachment}\n`;
+            message += `*Customer:* ${record.customerName}\n`;
+            message += `*Gross Amount:* ${record.grossAmount.toFixed(2)}\n`;
+            message += `*Discount:* ${record.discount.toFixed(2)}\n`;
+            message += `*Cash Received:* ${record.cashReceived.toFixed(2)}\n`;
+            message += `*Final Net Amount:* ${record.finalNetAmount.toFixed(2)}\n`;
+            message += `\n*Items:*\n`;
+            record.salesItems.forEach(item => {
+                message += `  - ${item.description} (Qty: ${item.qty}, Rate: ${item.rate.toFixed(2)}, Net: ${item.netAmount.toFixed(2)})\n`;
             });
+            message += `\n-------------------\n\n`;
         });
 
-        if (!isValid) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: 'Please ensure all sales items have a valid item code, selected description, quantity (>0), rate (>=0), and unit.'
-            });
-            return;
-        }
+        const whatsappLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(whatsappLink, '_blank');
+        Swal.fire('Exported!', 'Sales data prepared for WhatsApp.', 'success');
+    }
 
-        salesRecords[recordIndex] = updatedData;
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Sales Updated!',
-            text: 'Your sales invoice has been successfully updated.'
-        });
-
-        setFormMode('list'); 
-        resetForm(); 
-    });
-
-    listButton.addEventListener('click', function () {
-        setFormMode('list');
-    });
-
-    listButtonBack.addEventListener('click', function() {
-        setFormMode('add');
-    });
-
-    backToDashboardButton.addEventListener('click', function () {
-        Swal.fire({
-            title: 'Redirecting...',
-            text: 'You will be taken back to the dashboard.',
-            icon: 'info',
-            showConfirmButton: false,
-            timer: 1500
-        }).then(() => {
-            // window.location.href = 'dashboard.html';
-            console.log("Navigating to dashboard (simulated from form view)");
-        });
-    });
-
-    backToDashboardButtonList.addEventListener('click', function () {
-        Swal.fire({
-            title: 'Redirecting...',
-            text: 'You will be taken back to the dashboard.',
-            icon: 'info',
-            showConfirmButton: false,
-            timer: 1500
-        }).then(() => {
-            // window.location.href = 'dashboard.html';
-            console.log("Navigating to dashboard (simulated from list view)");
-        });
-    });
-
-    printFormButton.addEventListener('click', function () {
-        Swal.fire({
-            title: 'Printing...',
-            text: 'Opening print dialog for the current form view.',
-            icon: 'info',
-            showConfirmButton: false,
-            timer: 1500
-        }).then(() => {
-            window.print(); 
-        });
-    });
-
-    confirmClearFormButton.addEventListener('click', function () {
-        resetForm(); 
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Form Cleared!',
-            text: 'All form fields have been reset.'
-        });
-
-        const confirmDeleteModal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteModal'));
-        if (confirmDeleteModal) {
-            confirmDeleteModal.hide();
-        }
-    });
-
-    exportPdfButton.addEventListener('click', downloadSalesPdf);
-    exportExcelButton.addEventListener('click', exportSalesToExcel);
-    exportWhatsappButton.addEventListener('click', exportSalesToWhatsApp);
-    exportEmailButton.addEventListener('click', exportSalesToEmail); 
-
-
-
-    attachRowEventListeners(salesItemsTableBody.querySelector('tr'));
-
-    salesInvoiceNoInput.value = nextInvoiceNumber;
-
-    updateAllTotals();
-
+    resetForm();
     renderSalesList();
-    setFormMode('add');
 });
