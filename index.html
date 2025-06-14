@@ -24,17 +24,21 @@
 
             <form id="mainSalesForm">
                 <div class="row mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="date" class="form-label">Date</label>
                         <input type="date" class="form-control" id="date">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="salesInvoiceNo" class="form-label">Sales Invoice No.</label>
                         <input type="text" class="form-control" id="salesInvoiceNo" readonly tabindex="-1">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="description" class="form-label">Description</label>
                         <input type="text" class="form-control" id="description" placeholder="Enter sales description">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="attachment" class="form-label">Attachment</label>
+                        <input type="file" class="form-control" id="attachment" placeholder="e.g., invoice.pdf">
                     </div>
                 </div>
 
@@ -162,7 +166,7 @@
 
         <div id="salesListContainer" class="p-4 border rounded shadow-sm bg-light" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                 <button type="button" class="btn btn-outline-secondary" id="backToDashboardButtonList">
+                   <button type="button" class="btn btn-outline-secondary" id="backToDashboardButtonList">
                     <i class="bi bi-arrow-left-circle"></i> Back to Dashboard
                 </button>
                 <h2 class="text-center flex-grow-1">Sales List</h2>
